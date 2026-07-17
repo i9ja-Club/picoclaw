@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -197,6 +198,38 @@ func gatewayCmd() {
 	}
 
 	healthServer := health.NewServer(cfg.Gateway.Host, cfg.Gateway.Port)
+	healthServer.GetMux().HandleFunc("/v1/chat/completions", func(w http.ResponseWriter, r *http.Request) {
+		token := r.Header.Get("Authorization")
+		if token != "Bearer minaris_fixed_token_2026" {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		var req struct {
+			Model    string              `json:"model"`
+			Messages []providers.Message `json:"messages"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		resp, err := provider.Chat(r.Context(), req.Messages, nil, cfg.Agents.Defaults.Model, nil)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		type Choice struct {
+			Message providers.Message `json:"message"`
+		}
+		type OpenAIResp struct {
+			Choices []Choice `json:"choices"`
+		}
+		res := OpenAIResp{
+			Choices: []Choice{{Message: providers.Message{Role: "assistant", Content: resp.Content}}},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(res)
+	})
+
 	go func() {
 		if err := healthServer.Start(); err != nil && err != http.ErrServerClosed {
 			logger.ErrorCF("health", "Health server error", map[string]any{"error": err.Error()})

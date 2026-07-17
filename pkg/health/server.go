@@ -52,6 +52,10 @@ func NewServer(host string, port int) *Server {
 	return s
 }
 
+func (s *Server) GetMux() *http.ServeMux {
+	return s.server.Handler.(*http.ServeMux)
+}
+
 func (s *Server) Start() error {
 	s.mu.Lock()
 	s.ready = true

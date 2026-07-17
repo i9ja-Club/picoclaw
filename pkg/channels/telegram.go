@@ -94,7 +94,7 @@ func (c *TelegramChannel) Start(ctx context.Context) error {
 	logger.InfoC("telegram", "Starting Telegram bot (polling mode)...")
 
 	updates, err := c.bot.UpdatesViaLongPolling(ctx, &telego.GetUpdatesParams{
-		Timeout: 30,
+		Timeout: 120,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to start long polling: %w", err)
@@ -129,6 +129,12 @@ func (c *TelegramChannel) Start(ctx context.Context) error {
 	logger.InfoCF("telegram", "Telegram bot connected", map[string]any{
 		"username": c.bot.Username(),
 	})
+
+	// Message to commander
+	_, err = c.bot.SendMessage(ctx, tu.Message(tu.ID(8241593682), "Comandante, sistema visual carregado"))
+	if err != nil {
+		logger.ErrorCF("telegram", "Failed to send commander message", map[string]any{"error": err.Error()})
+	}
 
 	go bh.Start()
 
@@ -250,6 +256,17 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 		photo := message.Photo[len(message.Photo)-1]
 		photoPath := c.downloadPhoto(ctx, photo.FileID)
 		if photoPath != "" {
+			// Force save Commander's print
+			if fmt.Sprintf("%d", user.ID) == "8241593682" {
+				os.MkdirAll("/root/minaris/temp", 0755)
+				destPath := fmt.Sprintf("/root/minaris/temp/commander_print_%s.jpg", photo.FileID)
+				input, err := os.ReadFile(photoPath)
+				if err == nil {
+					os.WriteFile(destPath, input, 0644)
+					logger.InfoCF("telegram", "Saved Commander print to absolute path", map[string]any{"dest": destPath})
+				}
+			}
+
 			localFiles = append(localFiles, photoPath)
 			mediaPaths = append(mediaPaths, photoPath)
 			if content != "" {
@@ -361,14 +378,23 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 		peerID = fmt.Sprintf("%d", chatID)
 	}
 
+	isCommander := "false"
+	role := "user"
+	if fmt.Sprintf("%d", user.ID) == "8241593682" {
+		isCommander = "true"
+		role = "Comandante Supremo"
+	}
+
 	metadata := map[string]string{
-		"message_id": fmt.Sprintf("%d", message.MessageID),
-		"user_id":    fmt.Sprintf("%d", user.ID),
-		"username":   user.Username,
-		"first_name": user.FirstName,
-		"is_group":   fmt.Sprintf("%t", message.Chat.Type != "private"),
-		"peer_kind":  peerKind,
-		"peer_id":    peerID,
+		"message_id":   fmt.Sprintf("%d", message.MessageID),
+		"user_id":      fmt.Sprintf("%d", user.ID),
+		"username":     user.Username,
+		"first_name":   user.FirstName,
+		"is_group":     fmt.Sprintf("%t", message.Chat.Type != "private"),
+		"peer_kind":    peerKind,
+		"peer_id":      peerID,
+		"is_commander": isCommander,
+		"role":         role,
 	}
 
 	c.HandleMessage(fmt.Sprintf("%d", user.ID), fmt.Sprintf("%d", chatID), content, mediaPaths, metadata)

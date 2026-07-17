@@ -3,11 +3,6 @@ services:
     build: .
     container_name: minaris_picoclaw
     restart: unless-stopped
-    user: "0:0"
-    pid: host
-    privileged: true
-    cpus: 0.20
-    cpu_shares: 256
     ports:
       - "18790:18790"
     networks:
@@ -24,8 +19,6 @@ services:
     volumes:
       - ./config.json:/home/picoclaw/.picoclaw/config.json:ro
       - picoclaw-workspace:/home/picoclaw/.picoclaw/workspace
-      - /:/host:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     command: [ "gateway" ]
@@ -36,8 +29,6 @@ services:
       dockerfile: management-worker/Dockerfile
     container_name: minaris_picoclaw_management
     restart: unless-stopped
-    cpus: 0.20
-    cpu_shares: 256
     env_file:
       - /opt/minaris/.env
     environment:
